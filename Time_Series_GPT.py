@@ -140,12 +140,14 @@ class Time_Series_GPT(nn.Module):
         self.seq_length   = params_obj.seq_length       ## 40 or 15
         self.input_size   = params_obj.input_size
         self.num_features = params_obj.num_features
+        self.device       = params_obj.device
+        self.block_size   = params_obj.block_size
         self.MyName       = "The GPT model"
 
         self.pos_emb_table   = nn.Embedding(params_obj.block_size, params_obj.n_embd)      ## [block, 512] or [40, 512]
         
         self.blocks = nn.Sequential(
-                *[  Block(params_obj.n_embd, n_head=params_obj.n_head, params_obj.block_size) for _ in range(params_obj.n_layer)  ]
+                *[  Block(params_obj.n_embd, params_obj.n_head, params_obj.block_size) for _ in range(params_obj.n_layer)  ]
         )
         
         self.ln_f        = nn.LayerNorm(  params_obj.n_embd    )        
@@ -194,7 +196,7 @@ class Time_Series_GPT(nn.Module):
 
         ###########################################################
         
-        pos_emb = self.pos_emb_table( torch.arange(T, device=params_obj.device) )  
+        pos_emb = self.pos_emb_table( torch.arange(T, device=self.device) )  
         
         ###########################################################
         
@@ -215,7 +217,7 @@ class Time_Series_GPT(nn.Module):
         print(idx.shape)
         for _ in range(max_new_tokens):
             ## crop idx to the last block_size tokens
-            idx_cond = idx[:, -params_obj.block_size:, :]
+            idx_cond = idx[:, -self.block_size:, :]
             logits = self(idx_cond, 0 )    ## ## get preds
             logits = logits[:, -1, :]    ## focus on last one (B, E)
             logits = logits.unsqueeze(0)

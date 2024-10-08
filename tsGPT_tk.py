@@ -125,12 +125,12 @@ class ParamsGPT:
     def slidingWindowTrain(self, selec_offset):
         self.the_offset       = selec_offset   
         self.index_to_slice   = 436
-        self.index_to_slice   = self.index_to_slice + self.the_offset
-        sliced_chunk_CIVS     = self.for_RNN_data_CIVS[ self.index_to_slice : self.index_to_slice + self.the_range]
+        my_index_to_slice     = self.index_to_slice + self.the_offset
+        sliced_chunk_CIVS     = self.for_RNN_data_CIVS[ my_index_to_slice : my_index_to_slice + self.the_range]
         n                     = self.block_size
         train_CIVS            = sliced_chunk_CIVS[   : -n ] 
         test_CIVS             = sliced_chunk_CIVS[ -n:   ]
-        chunk_slideWind_train = train_CIVS[ :  ] 
+        chunk_slideWind_train = train_CIVS[  :  ] 
         return chunk_slideWind_train, test_CIVS
 
        

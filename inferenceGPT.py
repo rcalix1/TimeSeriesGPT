@@ -33,7 +33,7 @@ class inferenceGPT:
     def __init__(self):
         self.MyName         = 'inferenceGPT'
         self.eval_criterion = nn.MSELoss()
-        self.the_offset     = ''
+        self.the_offset     = None
         self.device         = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.excel_matrix   = np.zeros( (250, 30) )
         self.train_or_test  = None
@@ -124,41 +124,33 @@ class inferenceGPT:
             self.excel_matrix[ self.the_offset+i, j+3] =  yellow_l_SI_data_pred[i].round(decimals=2) ## Full SI
         
 
-    def plots_inference_one( self,  l_real, l_pred, yellow_l_SI_data_pred, si_2_all_real_24 ):
+    def plots_inference_one( self,  l_f0_real, l_f0_pred, yellow_l_SI_data_pred, si_2_all_real_24, l_f2_pred ):
 
-        plt.axvline(x = 4,  color = 'b') 
-        plt.axvline(x = 9,  color = 'b') 
-        plt.axvline(x = 14, color = 'b') 
+        if self.train_or_test:
+            plt.axvline(x = 4,  color = 'b') 
+            plt.axvline(x = 9,  color = 'b') 
+            plt.axvline(x = 14, color = 'b') 
         
         yellow_l_SI_data_pred = np.array( yellow_l_SI_data_pred )
-        x                     = [ i for i in range(   len(l_real)   ) ] 
+        x                     = [ i for i in range(   len(l_f0_real)   ) ] 
 
-        l_pred = np.roll(l_pred, -1)
+        l_f0_pred = np.roll(l_f0_pred, -1)
         
-        plt.scatter(x, l_real, label = "real", color='red') 
-        plt.plot(   x, l_real, label = "real", color='red')  
+        plt.scatter(x, l_f0_real, label = "real", color='red') 
+        plt.plot(   x, l_f0_real, label = "real", color='red')  
         
-        plt.scatter(x, l_pred, label = "pred", color='blue') 
-        plt.plot(   x, l_pred, label = "pred", color='blue') 
+        plt.scatter(x, l_f0_pred, label = "pred", color='blue') 
+        plt.plot(   x, l_f0_pred, label = "pred", color='blue') 
         
         plt.plot(   x, yellow_l_SI_data_pred, label = "pred1cast",     color='green')   
         plt.plot(   x,      si_2_all_real_24, label = "real SI",       color='red'  )   
+        plt.plot(   x,             l_f2_pred, label = "GPT pred SI",   color='gold'  ) 
         
         plt.legend() 
         plt.show()
 
         if not self.train_or_test:
-            self.add_data_to_excel_matrix( l_real, l_pred, yellow_l_SI_data_pred, si_2_all_real_24 )
-
-        
-    
-    def plots_to_excel( self, l_real, l_pred,  yellow_l_SI_data_pred, real_SI ):
-        xxx = [ i for i in range( l_SI_data_real.shape[0] )]
-        plt.title("The excel data")
-        plt.plot(   xxx, l_real, label = "delta real ",         color='red'  )   ## red
-        plt.plot(   xxx, l_pred, label = "delta pred ",         color='blue'  )   ## red
-        plt.legend() 
-        plt.show()
+            self.add_data_to_excel_matrix( l_f0_real, l_f0_pred, yellow_l_SI_data_pred, si_2_all_real_24 )
 
 
     def GPT_get_batch_test( self, x_time_series  ):
@@ -167,75 +159,78 @@ class inferenceGPT:
         x, y = x.to(self.device), y.to(self.device)
         return x, y
 
-  
-    def save_results_to_file( self, results_string, tsGPT_obj ):
-        results_string   = results_string + "," + str( tsGPT_obj.the_offset ) + "," 
-        results_string   = results_string + "SlidWind1" + "," + str( tsGPT_obj.max_iters ) + "," 
-        results_string   = results_string + tsGPT_obj.comment_exp +  "\n"
-        exp_results_file = open('experiment_results_file_GPT_CIVS.txt', 'a')
-        exp_results_file.write( results_string ) 
-        exp_results_file.close()
-        np.savetxt("for_excel_7_window.csv", self.excel_matrix, delimiter=",")
-
                                    
     def prep_data_for_GPT_gen(self, train_data, test_CIVS, x_means, x_standard_devs ):
         if self.train_or_test:
             frames           = [ train_data[ -5: ], test_CIVS ]    ## 5 + 15
             test_CIVS_concat = pd.concat( frames )
         else:
-            print("blue")
-            print( train_data.shape )
             test_CIVS_concat = train_data
         
         test_CIVS_tr        = torch.tensor(test_CIVS_concat.values).float()
         test_CIVS_tr_scaled = ( test_CIVS_tr - x_means ) / x_standard_devs
         return test_CIVS_tr_scaled 
+        
 
-    
-    def POST_Process_GPT_inference(self, pred_20_seq, xb_test, yb_test, x_means, x_standard_devs ):
-        si_mean                         = x_means[0, 0].numpy()
-        si_standard_dev                 = x_standard_devs[0, 0].numpy()
-        si_mean_all_24_features         = x_means[0, :].numpy()
-        si_standard_dev_all_24_features = x_standard_devs[0, :].numpy()
-        y_pred_gpt     = pred_20_seq.detach().cpu().numpy() 
-        y_pred_gpt     = y_pred_gpt.squeeze(0)
-        l_pred         = y_pred_gpt[ :, 0 ]
-        l_pred         = l_pred                   * si_standard_dev                   + si_mean
-        y_real_gpt     = yb_test.detach().cpu().numpy() 
-        y_real_gpt     = y_real_gpt.squeeze(0)
-        l_real         = y_real_gpt[ :, 0 ] 
-        l_real         = l_real                   * si_standard_dev                   + si_mean
-        xb_real_gpt    = xb_test.detach().cpu().numpy().squeeze(0)
-        xb_real_gpt    = xb_real_gpt              * si_standard_dev_all_24_features   + si_mean_all_24_features
-        l_real_all_24_features  = y_real_gpt[ :, :]
-        l_real_all_24_features  = l_real_all_24_features   * si_standard_dev_all_24_features   + si_mean_all_24_features
-        l_pred_all_24_features  = y_pred_gpt[ :, :]
-        l_pred_all_24_features  = l_pred_all_24_features   * si_standard_dev_all_24_features   + si_mean_all_24_features
-        results_string = self.metrics_function_all_details(  l_pred, l_real,  l_pred_all_24_features, l_real_all_24_features  )
+    def save_Excel_to_CSV(self):
+        excel_matrix_pd = pd.DataFrame( self.excel_matrix )
+        excel_matrix_pd.to_csv("for_excel_15_slide_window.csv")
+        line = 'id,delta_real,delta_pred,DrZ_real,DrZ_pred,delta_real,delta_pred,DrZ_real,DrZ_pred,delta_real,delta_pred,DrZ_real,DrZ_pred,'
+        line = line + 'delta_real,delta_pred,DrZ_real,DrZ_pred,delta_real,delta_pred,DrZ_real,DrZ_pred,delta_real,delta_pred,DrZ_real,DrZ_pred,'
+        line = line + 'delta_real,delta_pred,DrZ_real,DrZ_pred,None,None'
+        with open("for_excel_15_slide_window.csv", 'r+') as file: 
+            file_data = file.read() 
+            file.seek(0, 0) 
+            file.write(line + '\n' + file_data)
+        file.close()
+        
+
+    def get_prev_cast_plus_delta(self, l_f0_pred, xb_real_gpt, l_real_all_24_features):
         yellow_l_SI_data_pred = []
-        for i in range( len(l_pred) ):
+        for i in range( len(l_f0_pred) ):
             if (i-1) < 0:
                 prev_cast = xb_real_gpt[0, 2] 
             else:
                 prev_cast = l_real_all_24_features[i-1, 2]
-            the_curr_val =  prev_cast + l_pred[i]
+            the_curr_val =  prev_cast + l_f0_pred[i]
             yellow_l_SI_data_pred.append( the_curr_val ) 
-        self.plots_inference_one(  l_real, l_pred,  yellow_l_SI_data_pred, l_real_all_24_features[:, 2]  )
+        return yellow_l_SI_data_pred
+        
+
+    def un_scale_pred_real_data(self, the_data, x_means, x_standard_devs ):
+        si_mean_all_24_features         =         x_means[0, :].numpy()
+        si_standard_dev_all_24_features = x_standard_devs[0, :].numpy()
+        data_all_24_features  = the_data.detach().cpu().numpy().squeeze(0)
+        data_all_24_features  = data_all_24_features   * si_standard_dev_all_24_features   + si_mean_all_24_features
+        return data_all_24_features 
+
+    
+    def POST_Process_GPT_inference(self, pred_20_seq, xb_test, yb_test, x_means, x_standard_devs ):
+        
+        l_pred_all_24_features  = self.un_scale_pred_real_data( pred_20_seq, x_means, x_standard_devs )
+        l_f0_pred               = l_pred_all_24_features[ :, 0 ]
+        l_f2_pred               = l_pred_all_24_features[ :, 2 ]
+
+        l_real_all_24_features  = self.un_scale_pred_real_data( yb_test, x_means, x_standard_devs )
+        l_f0_real               = l_real_all_24_features[ :, 0 ] 
+
+        xb_real_gpt             = self.un_scale_pred_real_data( xb_test, x_means, x_standard_devs )
+ 
+        results_string = self.metrics_function_all_details(  l_f0_pred, l_f0_real,  l_pred_all_24_features, l_real_all_24_features  )
+        
+        yellow_l_SI_data_pred = self.get_prev_cast_plus_delta( l_f0_pred, xb_real_gpt, l_real_all_24_features)
+            
+        self.plots_inference_one(  l_f0_real, l_f0_pred,  yellow_l_SI_data_pred, l_real_all_24_features[:, 2], l_f2_pred )
+        
         return results_string
       
     
     def function_test_rc( self, train_data, test_CIVS,  model, x_means, x_standard_devs, train_or_test, how_many ):
         self.train_or_test = train_or_test
         x_test = self.prep_data_for_GPT_gen( train_data, test_CIVS, x_means, x_standard_devs )
-        print("rc")
-        print(train_data.shape)
-        print(x_test.shape)
         xb_test, yb_test = self.GPT_get_batch_test( x_test )   
-        print( xb_test.shape )
-        print( yb_test.shape )
         input_test_x     = xb_test[ :,  : 5 ]         ## give first 4 or 5 in sequence for GPT to generate the rest
         pred_20_seq      = model.generate( input_test_x, how_many )   ## how_many = 14 or 101
-        print( pred_20_seq.shape  )
         results_string = self.POST_Process_GPT_inference( pred_20_seq, xb_test, yb_test, x_means, x_standard_devs )
         return results_string 
         

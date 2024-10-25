@@ -1,3 +1,5 @@
+## Author: Ricardo A. Calix, Ph.D.
+## Data Wrangling Module
 
 import torch
 import pandas as pd
@@ -20,6 +22,7 @@ from sklearn.metrics import r2_score
 from einops import rearrange
 from math import sqrt, log
 from mlxtend.plotting import heatmap
+import mlxtend
 import matplotlib 
 
 
@@ -53,6 +56,12 @@ class tsDataWrangling:
         self.selected_cols_for_RNN_data_CIVS_df = None
         self.cols_rotation_DF                   = None
         self.dict_map_cnum_dates                = {}
+        self.FOUR_files_merged_data_rc          = None
+        self.res                                = None
+        self.df_res                             = None
+        self.df_res_shifted                     = None 
+        self.dates_df_res_shifted               = None
+        
         
 
         self.l_new  =      ['SI_f1', 
@@ -103,7 +112,7 @@ class tsDataWrangling:
                             'Selec_Top_Gas_CO_f3',  'Selec_Top_Gas_CO2_f3', 'Selec_Top_Gas_H2_f3', 'Selec_Top_Gas_N2_f3',
                             'NE_Uptake_f3', 'SE_Uptake_f3', 'NW_Uptake_f3', 'SW_Uptake_f3',  
                             'Slag_SiO2_f2', 'Slag_CaO_f2', 'Slag_MgO_f2', 'SNORT_VALVE_POSITION_f3', 'TOP_PRESS_f3', 'HOT_BLAST_PRESSURE_f3',
-                            'HOT_METAL_TEMP_f3']
+                            'Taphole_f2','HOT_METAL_TEMP_f3']
     
 
         self.selected_columns_RNN_no_dates = [ 'SI_f1', 'HOST_BLAST_MOISTURE_f3', 'HOT_BLAST_TMP_NS_f3', 
@@ -112,10 +121,18 @@ class tsDataWrangling:
                             'Selec_Top_Gas_CO_f3',  'Selec_Top_Gas_CO2_f3', 'Selec_Top_Gas_H2_f3', 'Selec_Top_Gas_N2_f3',
                             'NE_Uptake_f3', 'SE_Uptake_f3', 'NW_Uptake_f3', 'SW_Uptake_f3',  
                             'Slag_SiO2_f2', 'Slag_CaO_f2', 'Slag_MgO_f2', 'SNORT_VALVE_POSITION_f3', 'TOP_PRESS_f3', 'HOT_BLAST_PRESSURE_f3',
-                            'HOT_METAL_TEMP_f3']
+                            'Taphole_f2','HOT_METAL_TEMP_f3']
+
+        self.cols_to_use = [ 'SI_f1', 'HOST_BLAST_MOISTURE_f3', 'HOT_BLAST_TMP_NS_f3', 
+                            'NAT_GAS _INJECTION_f3',  'WINDRATE_f3',  'HIGH_PURITY_OXYGEN_f3', 'COAL_FLOW_f3', 
+                            'Cast_Avg_Mn_f2', 'Slag_Fe_f2',  'date_f1', 'CNUM', 'LNUM_f1',
+                            'Selec_Top_Gas_CO_f3',  'Selec_Top_Gas_CO2_f3', 'Selec_Top_Gas_H2_f3', 'Selec_Top_Gas_N2_f3',
+                            'NE_Uptake_f3', 'SE_Uptake_f3', 'NW_Uptake_f3', 'SW_Uptake_f3',  
+                            'Slag_SiO2_f2', 'Slag_CaO_f2', 'Slag_MgO_f2', 'SNORT_VALVE_POSITION_f3', 'TOP_PRESS_f3', 'HOT_BLAST_PRESSURE_f3',
+                            'Taphole_f2','HOT_METAL_TEMP_f3']
 
         
-        self.cols_to_use = ['SI_f1','HOST_BLAST_MOISTURE_f3','HOT_BLAST_TMP_NS_f3',
+        self.cols_to_use_backup = ['SI_f1','HOST_BLAST_MOISTURE_f3','HOT_BLAST_TMP_NS_f3',
                             'NAT_GAS _INJECTION_f3','WINDRATE_f3','HIGH_PURITY_OXYGEN_f3','COAL_FLOW_f3',
                             'Cast_Avg_Mn_f2','Slag_Fe_f2',
                             'Selec_Top_Gas_CO_f3','Selec_Top_Gas_CO2_f3','Selec_Top_Gas_H2_f3','Selec_Top_Gas_N2_f3',
@@ -207,6 +224,7 @@ class tsDataWrangling:
 
     
     def step1_iterate_coke_rate( self ):
+        ## print(self.coke_rate_only_f4_pd)
         aaa = np.repeat( self.coke_rate_only_f4_pd.values, 60, axis=0 )
         rc = 0
         for i in range( len(aaa) ):
@@ -224,18 +242,20 @@ class tsDataWrangling:
         newdf.columns = self.coke_rate_only_f4_pd.columns
         self.coke_rate_only_f4_pd_265k = newdf
         self.coke_rate_only_f4_pd_265k["MM_Timestamp_f1"] = self.coke_rate_only_f4_pd_265k["MM_Timestamp_f1"].astype("datetime64[ns]")
+        ## print( self.coke_rate_only_f4_pd_265k )
+        
 
     
     def step1_the_merge(self):
-        l1_min_by_min = self.MinByMin_137MB_data_CIVS.columns.values.tolist()
+        l1_min_by_min = self.MinByMin_137MB_data_CIVS.columns.values.tolist() 
         self.MinByMin_137MB_data_CIVS['Timestamp_f1']  = self.MinByMin_137MB_data_CIVS['Timestamp_f1'].astype(str)
         self.MinByMin_137MB_data_CIVS[self.l_mod_step1]= self.MinByMin_137MB_data_CIVS[self.l_mod_step1].apply(pd.to_numeric,errors='coerce')
         self.for_RNN_data_CIVS['Timestamp_f1']         = self.for_RNN_data_CIVS['Timestamp_f1'].astype(str)
         merged_data_rc = pd.merge( self.MinByMin_137MB_data_CIVS , self.for_RNN_data_CIVS, on='Timestamp_f1', how='left')
         merged_data_rc['MM_Timestamp_f1'] = merged_data_rc['MM_Timestamp_f1'].astype(str)
         self.coke_rate_only_f4_pd_265k['MM_Timestamp_f1'] = self.coke_rate_only_f4_pd_265k['MM_Timestamp_f1'].astype(str)
-        FOUR_files_merged_data_rc = pd.merge( merged_data_rc , self.coke_rate_only_f4_pd_265k, on='MM_Timestamp_f1', how='left')
-        FOUR_files_merged_data_rc.to_csv('input/step2/FINAL_RNN_mapped_dates_266096_rcalix_THIS_ONE.csv')
+        self.FOUR_files_merged_data_rc = pd.merge( merged_data_rc , self.coke_rate_only_f4_pd_265k, on='MM_Timestamp_f1', how='left')
+        self.FOUR_files_merged_data_rc.to_csv('input/step2/FINAL_RNN_mapped_dates_266096_rcalix_THIS_ONE.csv')
         
         
 
@@ -298,20 +318,21 @@ class tsDataWrangling:
                   method ='linear',
                   limit_direction ='forward'
         )
-        null_count = self.selected_cols_for_RNN_data_CIVS_df.isnull().sum().sum()
-        print('Number of null values:', null_count)
-        xxkk = sum( map(any, self.selected_cols_for_RNN_data_CIVS_df.isnull()   ))
-        print( xxkk )
-        df = self.selected_cols_for_RNN_data_CIVS_df 
+        
+        ## null_count = self.selected_cols_for_RNN_data_CIVS_df.isnull().sum().sum()
+        ## print('Number of null values:', null_count)
+        ## xxkk = sum( map(any, self.selected_cols_for_RNN_data_CIVS_df.isnull()   ))
+        ## print( xxkk )
+        ## df = self.selected_cols_for_RNN_data_CIVS_df 
         # TOTAL number of missing values:
-        print( df.isna().sum().sum() )
+        ## print( df.isna().sum().sum() )
         # number of ROWS with at least one missing value:
-        print( (df.isna().sum(axis=1) > 0).sum() )
+        ## print( (df.isna().sum(axis=1) > 0).sum() )
         # number of COLUMNS with at least one missing value:
-        print( (df.isna().sum(axis=0) > 0).sum() )
-        print(  df.isna().any(axis=1).sum() )
+        ## print( (df.isna().sum(axis=0) > 0).sum() )
+        ## print(  df.isna().any(axis=1).sum() )
         # check for NaN values in each column
-        print(df.isnull().any())
+        ## print(df.isnull().any())
 
     
     def step2_temp_plots(self):
@@ -328,7 +349,10 @@ class tsDataWrangling:
                 self.dict_map_cnum_dates[ cnum_new ] = self.selected_cols_for_RNN_data_CIVS_df.at[index, 'Timestamp_f1']
                 cnum_old                             = cnum_new 
 
+    
     def step2_plot_correlation_matrix( self, res ):
+        print(  res.info()  )
+        print(  res.shape   )
         res.plot( figsize=(20,80),  subplots=True   )
         headers_list = res.columns.values.tolist()
         print(  headers_list  )
@@ -336,6 +360,16 @@ class tsDataWrangling:
         hm = heatmap(cm, row_names= headers_list, column_names=headers_list, figsize=[20,10])
         plt.show()
         print(  res.info()  )
+
+    
+    def step2_simpler_plot_correlation_matrix( self, res ):
+        print(  res.info()  )
+        print(  res.shape   )
+        headers_list = res.columns.values.tolist()
+        print(  headers_list  )
+        cm = np.corrcoef(  res[ headers_list ].values.T  )
+        hm = heatmap(cm, row_names= headers_list, column_names=headers_list, figsize=[20,10])
+        plt.show()
 
 
 
@@ -350,24 +384,23 @@ class tsDataWrangling:
         res = res[ res['HOT_BLAST_PRESSURE_f3'] > 25 ]
         res = res[ res['TOP_PRESS_f3'] > 14 ]
         res = res.reset_index(drop=True)
-        self.step2_plot_correlation_matrix( res )
+        ## self.step2_plot_correlation_matrix( res )
         return res
         
         
     def step2_Previous_1_Cast_Processing(self,  res):
         self.cols_rotation_DF = res.columns.values.tolist()
         idx = res.index[ : -1]
-        y_1_cast = res.iloc[ 1: , 0 ].values
-        x_1_cast = res.iloc[ :-1 , 1: ].values
+        y_1_cast = res.iloc[ 1:   ,  0 ].values
+        x_1_cast = res.iloc[  :-1 , 1: ].values
         df_xs  = pd.DataFrame(x_1_cast , columns=  self.cols_rotation_DF[1:],    index=idx)
         df_y   = pd.DataFrame(y_1_cast , columns=[ self.cols_rotation_DF[0] ],   index=idx)
         df_res = pd.concat( [ df_y, df_xs], axis=1 )     
-        self.step2_plot_correlation_matrix( df_res )
+        ## self.step2_plot_correlation_matrix( df_res )
         return df_res
         
 
-    def step2_get_coke_rate_6_hour(self, def_res, res):
-        df_res        = df_res[ self.cols_to_use ]   
+    def step2_get_coke_rate_6_hour(self, res):
         x_coke_6_df   = res['cokerate_f4']
         x_coke_6_hour = x_coke_6_df.iloc[ : -2 ].values
         return x_coke_6_hour
@@ -380,11 +413,12 @@ class tsDataWrangling:
         df_si_x        = pd.DataFrame(si_and_1_cast_x,  columns=self.cols_rotation_DF,        index=idx)
         df_x_coke      = pd.DataFrame(x_coke_6_hour   , columns=['cokerate_f4'],              index=idx)
         df_res_shifted = pd.concat( [ df_si_x, df_x_coke], axis=1 )  
-        self.step2_plot_correlation_matrix( df_res_shifted )
+        ## self.step2_plot_correlation_matrix( df_res_shifted )
         return df_res_shifted
 
+
     
-    def step2_add_dates_to_processed_data(self, df_res_shifted):
+    def step2_add_dates_to_processed_data(self, df_res_shifted ):
         df_res_shifted.insert(1, 'Date_Map', 'abc')
         for index, row in df_res_shifted.iterrows():
             the_cnum = df_res_shifted.at[index, 'CNUM']
@@ -397,22 +431,25 @@ class tsDataWrangling:
     
     def step2_wrangle(self):
         self.for_RNN_data_CIVS = pd.read_csv('input/step2/FINAL_RNN_mapped_dates_266096_rcalix_THIS_ONE.csv')
-        self.step2_initial_data_viewing()
+        ## self.step2_initial_data_viewing()
+        ## print( self.for_RNN_data_CIVS.info(verbose=True) )  ## helpful to view features before selection
         self.all_columns_in_DF                  = self.for_RNN_data_CIVS.columns.values.tolist()
         self.selected_cols_for_RNN_data_CIVS_df = self.for_RNN_data_CIVS[  self.selected_columns_RNN  ]
         self.step2_interpolate_and_check_missing_values()
         self.selected_cols_for_RNN_data_CIVS_df = self.remove_downtime(  self.selected_cols_for_RNN_data_CIVS_df  )
         self.selected_cols_for_RNN_data_CIVS_df = self.selected_cols_for_RNN_data_CIVS_df.reset_index()
-        self.step2_temp_plots()
+        ## self.step2_temp_plots()
         self.step2_create_dictionary_of_dates()
-        res                  = self.step2_mean_on_CNUM_and_remove_some_peaks()
-        df_res               = self.step2_Previous_1_Cast_Processing( res )
-        x_coke_6_hour        = self.step2_get_coke_rate_6_hour(def_res, res)
-        df_res_shifted       = self.step2_concat_prevCast_and_cokeRate(  df_res, x_coke_6_hour )
-        dates_df_res_shifted = self.step2_add_dates_to_processed_data(df_res_shifted)
-        df_res_shifted.to_csv(      'input/step3/RNN_time_DELAYS_2000_PerCast_rcalix.csv'              )
-        dates_df_res_shifted.to_csv('input/step3/dates_RC_CNUM_RNN_time_DELAYS_2000_PerCast_rcalix.csv')
-
+        self.res                  = self.step2_mean_on_CNUM_and_remove_some_peaks()
+        self.df_res               = self.step2_Previous_1_Cast_Processing( self.res )
+        x_coke_6_hour             = self.step2_get_coke_rate_6_hour( self.res )
+        self.df_res               = self.df_res[ self.cols_to_use ]    ## removes coke rate, to add with rotation
+        self.df_res_shifted       = self.step2_concat_prevCast_and_cokeRate(  self.df_res, x_coke_6_hour )
+        df_copy                   = self.df_res_shifted.copy()
+        self.dates_df_res_shifted = self.step2_add_dates_to_processed_data(  df_copy  )
+        self.df_res_shifted.to_csv(      'input/step3/RNN_time_DELAYS_2000_PerCast_rcalix.csv'              )
+        self.dates_df_res_shifted.to_csv('input/step3/dates_RC_CNUM_RNN_time_DELAYS_2000_PerCast_rcalix.csv')
+        
 
 
     

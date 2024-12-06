@@ -1,2 +1,3 @@
 # TimeSeriesGPT
-Developing a GPT for Time Series Data
+
+* Developing a GPT for Time Series Data prediction. 
